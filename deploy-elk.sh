@@ -66,7 +66,7 @@ deploy_elk() {
     VAULT_ARGS=""
     for vault_file in passwords/*.yml; do
         if [ -f "$vault_file" ]; then
-            VAULT_ARGS+=" --vault-id @$vault_file"
+            VAULT_ARGS+=" --extra-vars @$vault_file"
         fi
     done
     ansible-playbook ansible-elk-cluster.yml -i inventory/hosts.yml --vault-password-file .vault_pass.txt $VAULT_ARGS
@@ -86,7 +86,7 @@ deploy_by_role() {
     VAULT_ARGS=""
     for vault_file in passwords/*.yml; do
         if [ -f "$vault_file" ]; then
-            VAULT_ARGS+=" --vault-id @$vault_file"
+            VAULT_ARGS+=" --extra-vars @$vault_file"
         fi
     done
 
