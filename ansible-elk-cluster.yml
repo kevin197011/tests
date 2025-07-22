@@ -179,8 +179,7 @@
   hosts: elasticsearch
   become: yes
   vars:
-    # ELK Versions
-    elasticsearch_version: "8.17.0"
+    # ELK Versions - will use inventory variable
 
     # Cluster Configuration
     cluster_name: "elk-cluster"
@@ -362,8 +361,7 @@
   hosts: logstash
   become: yes
   vars:
-    # ELK Versions
-    logstash_version: "8.17.0"
+    # ELK Versions - will use inventory variable
 
     # Security Configuration
     elasticsearch_password: "{{ vault_elasticsearch_password }}"
@@ -447,8 +445,7 @@
   hosts: kibana
   become: yes
   vars:
-    # ELK Versions
-    kibana_version: "8.17.0"
+    # ELK Versions - will use inventory variable
 
     # Security Configuration
     elasticsearch_password: "{{ vault_elasticsearch_password }}"
