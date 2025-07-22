@@ -1,0 +1,421 @@
+---
+# Copyright (c) 2025 kk
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+# Production ELK Cluster Deployment Playbook
+# Elasticsearch + Logstash + Kibana with system optimizations
+
+- name: Production ELK Cluster Deployment
+  hosts: all
+  become: yes
+  vars:
+    # ELK Versions
+    elasticsearch_version: "8.18.4"
+    logstash_version: "8.18.4"
+    kibana_version: "8.18.4"
+
+    # Java Version
+    java_version: "17"
+
+    # Cluster Configuration
+    cluster_name: "elk-cluster"
+    node_name: "{{ inventory_hostname }}"
+
+    # Elasticsearch Configuration
+    es_heap_size: "{{ (ansible_memtotal_mb * 0.5) | int }}m"
+    es_data_path: "/var/lib/elasticsearch"
+    es_logs_path: "/var/log/elasticsearch"
+
+    # System Configuration
+    vm_max_map_count: 262144
+    file_descriptor_limit: 65536
+
+    # Network Configuration
+    tcp_keepalive_time: 300
+    tcp_keepalive_intvl: 75
+    tcp_keepalive_probes: 9
+
+    # Disk I/O Optimization
+    read_ahead_kb: 4096
+    scheduler: "deadline"
+
+    # Security Configuration
+    elasticsearch_password: "{{ vault_elasticsearch_password }}"
+    kibana_password: "{{ vault_kibana_password }}"
+    logstash_password: "{{ vault_logstash_password }}"
+    beats_password: "{{ vault_beats_password }}"
+    monitoring_password: "{{ vault_monitoring_password }}"
+    remote_monitoring_password: "{{ vault_remote_monitoring_password }}"
+
+    es_cert_dns: "{{ groups['elasticsearch'] | join(',') }}"
+    es_cert_ips: "{{ groups['elasticsearch'] | map('extract', hostvars, ['ansible_host']) | join(',') }}"
+    es_cert_path: /opt/elasticsearch/config/elastic-certificates.p12
+
+  tasks:
+    - name: Disable firewalld
+      systemd:
+        name: firewalld
+        state: stopped
+        enabled: no
+      tags: [system, security]
+
+    - name: Disable SELinux (setenforce 0)
+      command: setenforce 0
+      when: ansible_selinux.status == 'enabled'
+      ignore_errors: yes
+      tags: [system, security]
+
+    - name: Disable SELinux permanently
+      replace:
+        path: /etc/selinux/config
+        regexp: '^SELINUX=.*'
+        replace: 'SELINUX=disabled'
+      tags: [system, security]
+
+    - name: Update system packages
+      yum:
+        name: "*"
+        state: latest
+        update_cache: yes
+      tags: [system, packages]
+
+    - name: Install required packages
+      yum:
+        name:
+          - java-{{ java_version }}-openjdk
+          - java-{{ java_version }}-openjdk-headless
+          - wget
+          - curl
+          - unzip
+          - vim
+          - htop
+          - iotop
+          - sysstat
+          - chrony
+          - ntpdate
+          - net-tools
+          - lsof
+          - strace
+          - tcpdump
+          - nc
+          - telnet
+          - jq
+          - python3-pip
+        state: present
+      tags: [system, packages]
+
+    - name: Configure timezone
+      timezone:
+        name: Asia/Taipei
+      tags: [system, timezone]
+
+    - name: Configure chrony
+      template:
+        src: chrony.conf.j2
+        dest: /etc/chrony.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart chronyd
+      tags: [system, timezone]
+
+    - name: Configure system limits
+      template:
+        src: limits.conf.j2
+        dest: /etc/security/limits.conf
+        owner: root
+        group: root
+        mode: '0644'
+      tags: [system, limits]
+
+    - name: Configure kernel parameters
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { name: 'vm.max_map_count', value: '{{ vm_max_map_count }}' }
+        - { name: 'net.core.somaxconn', value: '65535' }
+        - { name: 'net.ipv4.tcp_max_syn_backlog', value: '65535' }
+        - { name: 'net.ipv4.tcp_keepalive_time', value: '{{ tcp_keepalive_time }}' }
+        - { name: 'net.ipv4.tcp_keepalive_intvl', value: '{{ tcp_keepalive_intvl }}' }
+        - { name: 'net.ipv4.tcp_keepalive_probes', value: '{{ tcp_keepalive_probes }}' }
+        - { name: 'net.ipv4.tcp_fin_timeout', value: '30' }
+        - { name: 'net.ipv4.tcp_tw_reuse', value: '1' }
+        - { name: 'net.ipv4.ip_local_port_range', value: '1024 65535' }
+        - { name: 'vm.swappiness', value: '1' }
+        - { name: 'vm.dirty_ratio', value: '15' }
+        - { name: 'vm.dirty_background_ratio', value: '5' }
+      tags: [system, kernel]
+
+    - name: Create elasticsearch user
+      user:
+        name: elasticsearch
+        system: yes
+        shell: /bin/bash
+        home: /home/elasticsearch
+        createhome: yes
+      tags: [elasticsearch, users]
+
+    - name: Create elasticsearch directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0755'
+      loop:
+        - "{{ es_data_path }}"
+        - "{{ es_logs_path }}"
+        - /etc/elasticsearch
+        - /etc/elasticsearch/jvm.options.d
+        - /etc/elasticsearch/log4j2.properties.d
+      tags: [elasticsearch, directories]
+
+    - name: Create logstash directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0755'
+      loop:
+        - /var/lib/logstash
+        - /var/log/logstash
+        - /etc/logstash
+        - /etc/logstash/conf.d
+      tags: [logstash, directories]
+
+    - name: Create kibana directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0755'
+      loop:
+        - /var/lib/kibana
+        - /var/log/kibana
+        - /etc/kibana
+      tags: [kibana, directories]
+
+    - name: Download and install Elasticsearch
+      block:
+        - name: Download Elasticsearch
+          get_url:
+            url: "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-{{ elasticsearch_version }}-linux-x86_64.tar.gz"
+            dest: /tmp/elasticsearch.tar.gz
+            mode: '0644'
+            timeout: 300
+
+        - name: Extract Elasticsearch
+          unarchive:
+            src: /tmp/elasticsearch.tar.gz
+            dest: /opt
+            remote_src: yes
+            creates: /opt/elasticsearch-{{ elasticsearch_version }}
+
+        - name: Create elasticsearch symlink
+          file:
+            src: /opt/elasticsearch-{{ elasticsearch_version }}
+            dest: /opt/elasticsearch
+            state: link
+            owner: elasticsearch
+            group: elasticsearch
+
+        - name: Copy Elasticsearch configuration
+          template:
+            src: elasticsearch.yml.j2
+            dest: /opt/elasticsearch/config/elasticsearch.yml
+            owner: elasticsearch
+            group: elasticsearch
+            mode: '0644'
+
+        # 自动插入 elastic-certificates.p12 证书自动化任务
+        - name: Generate elastic-certificates.p12 on first ES node
+          command: >
+            /opt/elasticsearch/bin/elasticsearch-certutil cert --silent
+            --out {{ es_cert_path }}
+            --dns {{ es_cert_dns }}
+            --ip {{ es_cert_ips }}
+          args:
+            creates: "{{ es_cert_path }}"
+          run_once: true
+          delegate_to: "{{ groups['elasticsearch'][0] }}"
+          tags: [elasticsearch, cert]
+
+        - name: Fetch elastic-certificates.p12 to control node
+          fetch:
+            src: "{{ es_cert_path }}"
+            dest: /tmp/elastic-certificates.p12
+            flat: yes
+          run_once: true
+          delegate_to: "{{ groups['elasticsearch'][0] }}"
+          tags: [elasticsearch, cert]
+
+        - name: Distribute elastic-certificates.p12 to all ES nodes
+          copy:
+            src: /tmp/elastic-certificates.p12
+            dest: "{{ es_cert_path }}"
+            owner: elasticsearch
+            group: elasticsearch
+            mode: '0600'
+          tags: [elasticsearch, cert]
+
+        - name: Configure JVM options
+          template:
+            src: jvm.options.j2
+            dest: /opt/elasticsearch/config/jvm.options
+            owner: elasticsearch
+            group: elasticsearch
+            mode: '0644'
+
+        - name: Create systemd service
+          template:
+            src: elasticsearch.service.j2
+            dest: /etc/systemd/system/elasticsearch.service
+            owner: root
+            group: root
+            mode: '0644'
+          notify: reload systemd
+
+      tags: [elasticsearch, install]
+
+    - name: Download and install Logstash
+      block:
+        - name: Download Logstash
+          get_url:
+            url: "https://artifacts.elastic.co/downloads/logstash/logstash-{{ logstash_version }}-linux-x86_64.tar.gz"
+            dest: /tmp/logstash.tar.gz
+            mode: '0644'
+            timeout: 300
+
+        - name: Extract Logstash
+          unarchive:
+            src: /tmp/logstash.tar.gz
+            dest: /opt
+            remote_src: yes
+            creates: /opt/logstash-{{ logstash_version }}
+
+        - name: Create logstash symlink
+          file:
+            src: /opt/logstash-{{ logstash_version }}
+            dest: /opt/logstash
+            state: link
+            owner: elasticsearch
+            group: elasticsearch
+
+        - name: Copy Logstash configuration
+          template:
+            src: logstash.yml.j2
+            dest: /opt/logstash/config/logstash.yml
+            owner: elasticsearch
+            group: elasticsearch
+            mode: '0644'
+
+        - name: Create systemd service
+          template:
+            src: logstash.service.j2
+            dest: /etc/systemd/system/logstash.service
+            owner: root
+            group: root
+            mode: '0644'
+          notify: reload systemd
+
+      tags: [logstash, install]
+
+    - name: Download and install Kibana
+      block:
+        - name: Download Kibana
+          get_url:
+            url: "https://artifacts.elastic.co/downloads/kibana/kibana-{{ kibana_version }}-linux-x86_64.tar.gz"
+            dest: /tmp/kibana.tar.gz
+            mode: '0644'
+            timeout: 300
+
+        - name: Extract Kibana
+          unarchive:
+            src: /tmp/kibana.tar.gz
+            dest: /opt
+            remote_src: yes
+            creates: /opt/kibana-{{ kibana_version }}
+
+        - name: Create kibana symlink
+          file:
+            src: /opt/kibana-{{ kibana_version }}
+            dest: /opt/kibana
+            state: link
+            owner: elasticsearch
+            group: elasticsearch
+
+        - name: Copy Kibana configuration
+          template:
+            src: kibana.yml.j2
+            dest: /opt/kibana/config/kibana.yml
+            owner: elasticsearch
+            group: elasticsearch
+            mode: '0644'
+
+        - name: Create systemd service
+          template:
+            src: kibana.service.j2
+            dest: /etc/systemd/system/kibana.service
+            owner: root
+            group: root
+            mode: '0644'
+          notify: reload systemd
+
+      tags: [kibana, install]
+
+    - name: Start and enable services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      loop:
+        - elasticsearch
+        - logstash
+        - kibana
+      tags: [services]
+
+    - name: Wait for Elasticsearch to be ready
+      uri:
+        url: "http://localhost:9200/_cluster/health"
+        method: GET
+        status_code: 200
+      register: es_health
+      until: es_health.status == 200
+      retries: 30
+      delay: 10
+      tags: [elasticsearch, health]
+
+    - name: Set Elasticsearch passwords
+      uri:
+        url: "http://localhost:9200/_security/user/{{ item.user }}/_password"
+        method: POST
+        headers:
+          Content-Type: application/json
+        body: '{"password": "{{ item.password }}"}'
+        status_code: 200
+      loop:
+        - { user: 'elastic', password: '{{ elasticsearch_password }}' }
+        - { user: 'kibana_system', password: '{{ kibana_password }}' }
+        - { user: 'logstash_system', password: '{{ logstash_password }}' }
+        - { user: 'beats_system', password: '{{ beats_password }}' }
+        - { user: 'monitoring_agent', password: '{{ monitoring_password }}' }
+        - { user: 'remote_monitoring_user', password: '{{ remote_monitoring_password }}' }
+      tags: [elasticsearch, security]
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: restart chronyd
+      systemd:
+        name: chronyd
+        state: restarted

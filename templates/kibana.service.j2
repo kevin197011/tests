@@ -1,0 +1,81 @@
+# Copyright (c) 2025 kk
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+[Unit]
+Description=Kibana
+Documentation=https://www.elastic.co
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+RuntimeDirectory=kibana
+PrivateTmp=true
+Environment=NODE_OPTIONS="--max-old-space-size=4096"
+Environment=KB_HOME=/opt/kibana
+Environment=KB_PATH_CONF=/opt/kibana/config
+Environment=PID_DIR=/var/run/kibana
+EnvironmentFile=-/etc/default/kibana
+
+WorkingDirectory=/opt/kibana
+
+User=elasticsearch
+Group=elasticsearch
+
+ExecStart=/opt/kibana/bin/kibana
+
+# Specifies the maximum file descriptor number that can be opened by this process
+LimitNOFILE=65536
+
+# Specifies the maximum number of processes
+LimitNPROC=4096
+
+# Specifies the maximum size of virtual memory
+LimitAS=infinity
+
+# Specifies the maximum file size
+LimitFSIZE=infinity
+
+# Disable timeout logic and wait until process is stopped
+TimeoutStopSec=0
+
+# SIGTERM signal is used to stop the Node.js process
+KillSignal=SIGTERM
+
+# Send the signal only to the Node.js process rather than its control group
+KillMode=mixed
+
+# Node.js process is never killed
+SendSIGKILL=no
+
+# When a Node.js process receives a SIGTERM signal it exits with code 143
+SuccessExitStatus=143
+
+# Allow a slow startup before the systemd notifier module kicks in to extend the timeout
+TimeoutStartSec=75
+
+# The number of seconds to wait for the kibana process to start
+TimeoutStartFailureMode=continue
+
+# Restart service when it crashes
+Restart=always
+
+# Restart service after 5 seconds
+RestartSec=5
+
+# Give systemd time to configure the /proc filesystem
+TimeoutStopSec=0
+
+# The number of seconds to wait for the kibana process to stop
+TimeoutStopFailureMode=continue
+
+# StandardOutput is configured to append to /var/log/kibana/stdout.log
+StandardOutput=append:/var/log/kibana/stdout.log
+
+# StandardError is configured to append to /var/log/kibana/stderr.log
+StandardError=append:/var/log/kibana/stderr.log
+
+[Install]
+WantedBy=multi-user.target

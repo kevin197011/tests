@@ -1,0 +1,52 @@
+# Copyright (c) 2025 kk
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+# Logstash Configuration Template
+
+# Node Configuration
+node.name: {{ node_name }}
+
+# Path Configuration
+path.data: /var/lib/logstash
+path.logs: /var/log/logstash
+
+# Pipeline Configuration
+pipeline.workers: {{ ansible_processor_cores | default(2) }}
+pipeline.batch.size: 125
+pipeline.batch.delay: 50
+
+# Queue Configuration
+queue.type: persisted
+queue.max_bytes: 1gb
+
+# Monitoring Configuration
+monitoring.enabled: true
+monitoring.elasticsearch.hosts: ["http://localhost:9200"]
+
+# Security Configuration
+xpack.monitoring.enabled: true
+xpack.monitoring.elasticsearch.username: elastic
+xpack.monitoring.elasticsearch.password: {{ elasticsearch_password }}
+
+# Logging Configuration
+log.level: info
+log.format: json
+
+# Performance Configuration
+http.host: 0.0.0.0
+http.port: 9600
+
+# Memory Configuration
+api.enabled: true
+api.http.host: 0.0.0.0
+api.http.port: 9600
+
+# Dead Letter Queue
+dead_letter_queue.enable: true
+dead_letter_queue.max_bytes: 1gb
+
+# Pipeline Settings
+pipeline.ordered: auto
+pipeline.ecs_compatibility: v8

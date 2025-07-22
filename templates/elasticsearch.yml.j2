@@ -1,0 +1,69 @@
+# Copyright (c) 2025 kk
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+# Elasticsearch Configuration Template
+
+# Cluster Configuration
+cluster.name: {{ cluster_name }}
+node.name: {{ node_name }}
+node.roles: [data, master, ingest]
+
+# Network Configuration
+network.host: 0.0.0.0
+http.port: 9200
+transport.port: 9300
+
+# Discovery Configuration
+discovery.seed_hosts: ["{{ groups['elasticsearch'] | join('", "') }}"]
+cluster.initial_master_nodes: ["{{ groups['elasticsearch'] | join('", "') }}"]
+
+# Path Configuration
+path.data: {{ es_data_path }}
+path.logs: {{ es_logs_path }}
+
+# Memory Configuration
+bootstrap.memory_lock: true
+
+# Security Configuration
+xpack.security.enabled: true
+xpack.security.transport.ssl.enabled: true
+xpack.security.transport.ssl.verification_mode: certificate
+xpack.security.transport.ssl.keystore.path: elastic-certificates.p12
+xpack.security.transport.ssl.truststore.path: elastic-certificates.p12
+
+# HTTP Security
+xpack.security.http.ssl.enabled: true
+xpack.security.http.ssl.keystore.path: elastic-certificates.p12
+xpack.security.http.ssl.truststore.path: elastic-certificates.p12
+
+# Index Configuration
+action.auto_create_index: false
+index.number_of_shards: 3
+index.number_of_replicas: 1
+
+# Thread Pool Configuration
+thread_pool.write.queue_size: 1000
+thread_pool.search.queue_size: 1000
+
+# Circuit Breaker Configuration
+indices.breaker.total.limit: 70%
+indices.breaker.fielddata.limit: 40%
+indices.breaker.request.limit: 60%
+
+# Recovery Configuration
+cluster.routing.allocation.disk.threshold_enabled: true
+cluster.routing.allocation.disk.watermark.low: 85%
+cluster.routing.allocation.disk.watermark.high: 90%
+cluster.routing.allocation.disk.watermark.flood_stage: 95%
+
+# Snapshot Configuration
+path.repo: ["/var/lib/elasticsearch/snapshots"]
+
+# Monitoring Configuration
+xpack.monitoring.enabled: true
+xpack.monitoring.collection.enabled: true
+
+# Logging Configuration
+logger.level: INFO

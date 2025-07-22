@@ -1,0 +1,199 @@
+# Copyright (c) 2025 kk
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+# ELK Cluster Deployment .gitignore
+
+# ===== 密码和敏感文件 =====
+# 密码文件
+passwords/
+*.vault
+*.key
+*.pem
+*.p12
+*.crt
+*.csr
+*.srl
+elastic-certificates.p12
+elastic-certificates.pem
+
+# Ansible Vault 文件
+vault.yml
+vault.yaml
+*.vault.yml
+*.vault.yaml
+
+# 环境变量文件
+.env
+.env.local
+.env.production
+.env.staging
+
+# ===== Ansible 相关 =====
+# Ansible 临时文件
+*.retry
+.ansible/
+ansible.log
+ansible.log.*
+
+# Ansible 缓存
+.cache/
+*.cache
+
+# ===== 日志文件 =====
+# 系统日志
+*.log
+*.log.*
+logs/
+log/
+
+# ELK 日志
+elasticsearch.log*
+logstash.log*
+kibana.log*
+
+# ===== 临时文件 =====
+# 临时文件
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# 备份文件
+*.bak
+*.backup
+*.old
+
+# ===== 系统文件 =====
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ===== IDE 和编辑器 =====
+# VSCode
+.vscode/
+*.code-workspace
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ===== 构建和部署 =====
+# 构建产物
+build/
+dist/
+target/
+*.tar.gz
+*.zip
+
+# 部署文件
+deployments/
+*.deployment
+
+# ===== 测试相关 =====
+# 测试覆盖率
+coverage/
+*.coverage
+.coverage.*
+
+# 测试报告
+test-results/
+junit.xml
+test-report.xml
+
+# ===== 数据库和缓存 =====
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# Redis 转储
+dump.rdb
+
+# ===== 网络和证书 =====
+# SSL 证书
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# 证书目录
+certs/
+certificates/
+ssl/
+
+# ===== 监控和指标 =====
+# Prometheus 数据
+prometheus_data/
+*.prom
+
+# Grafana 数据
+grafana_data/
+
+# ===== 其他 =====
+# 锁文件
+*.lock
+.lock
+
+# 包管理器
+node_modules/
+vendor/
+.venv/
+venv/
+env/
+ENV/
+
+# 配置文件（如果包含敏感信息）
+config.local.yml
+config.production.yml
+config.staging.yml
+
+# 本地配置文件
+local.yml
+local.yaml
+local.json
+local.ini
+
+# 用户特定文件
+user_config.yml
+personal.yml
+
+.cursor

@@ -1,0 +1,75 @@
+# Copyright (c) 2025 kk
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+# Kibana Configuration Template
+
+# Server Configuration
+server.name: {{ node_name }}
+server.host: 0.0.0.0
+server.port: 5601
+server.basePath: ""
+server.rewriteBasePath: false
+
+# Elasticsearch Configuration
+elasticsearch.hosts: ["http://localhost:9200"]
+elasticsearch.username: kibana_system
+elasticsearch.password: {{ kibana_password }}
+
+# Security Configuration
+xpack.security.enabled: true
+xpack.security.encryptionKey: "{{ 32 | random_string }}"
+xpack.encryptedSavedObjects.encryptionKey: "{{ 32 | random_string }}"
+
+# Monitoring Configuration
+xpack.monitoring.enabled: true
+xpack.monitoring.ui.container.elasticsearch.enabled: true
+
+# Reporting Configuration
+xpack.reporting.enabled: true
+xpack.reporting.kibanaServer.hostname: "{{ ansible_default_ipv4.address }}"
+
+# Canvas Configuration
+xpack.canvas.enabled: true
+
+# Maps Configuration
+xpack.maps.enabled: true
+
+# ML Configuration
+xpack.ml.enabled: true
+
+# Watcher Configuration
+xpack.watcher.enabled: true
+
+# Graph Configuration
+xpack.graph.enabled: true
+
+# Logging Configuration
+logging.verbose: false
+logging.dest: stdout
+logging.json: true
+
+# Performance Configuration
+optimize.bundleFilter: "!tests"
+optimize.useBundleCache: true
+optimize.bundleCacheTTL: 86400000
+
+# Memory Configuration
+elasticsearch.requestTimeout: 30000
+elasticsearch.shardTimeout: 30000
+
+# UI Configuration
+uiSettings.overrides.useLegacyTableApi: false
+uiSettings.overrides.visualization:visualize:legacyChartsLibrary: false
+
+# Telemetry Configuration
+telemetry.enabled: false
+telemetry.allowChangingOptInStatus: false
+
+# News Configuration
+newsfeed.enabled: false
+
+# Status Configuration
+status.allowAnonymous: false
+status.v6ApiFormat: true

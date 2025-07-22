@@ -1,0 +1,42 @@
+# Copyright (c) 2025 kk
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+# JVM Options for Elasticsearch
+
+# Memory Configuration
+-Xms{{ es_heap_size }}
+-Xmx{{ es_heap_size }}
+
+# Garbage Collection
+-XX:+UseG1GC
+-XX:G1ReservePercent=25
+-XX:InitiatingHeapOccupancyPercent=75
+
+# Memory Management
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:HeapDumpPath={{ es_logs_path }}
+
+# Performance Tuning
+-XX:+UseStringDeduplication
+-XX:+OptimizeStringConcat
+-XX:+UseCompressedOops
+-XX:+UseCompressedClassPointers
+
+# Logging
+-Dlog4j2.disable.jmx=true
+-Dlog4j2.formatMsgNoLookups=true
+
+# Security
+-Djava.security.policy=file:///opt/elasticsearch/config/elasticsearch.policy
+
+# Network
+-Djava.net.preferIPv4Stack=true
+
+# File Descriptors
+-Djna.nosys=true
+
+# Disable Warnings
+-XX:+UnlockExperimentalVMOptions
+-XX:+DisableExplicitGC

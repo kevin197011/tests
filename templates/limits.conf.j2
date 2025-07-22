@@ -1,0 +1,25 @@
+# Copyright (c) 2025 kk
+#
+# This software is released under the MIT License.
+# https://opensource.org/licenses/MIT
+
+# /etc/security/limits.conf
+# System limits configuration for ELK Stack
+
+# Elasticsearch user limits
+elasticsearch soft nofile {{ file_descriptor_limit }}
+elasticsearch hard nofile {{ file_descriptor_limit }}
+elasticsearch soft nproc 4096
+elasticsearch hard nproc 4096
+elasticsearch soft memlock unlimited
+elasticsearch hard memlock unlimited
+
+# Root user limits
+root soft nofile {{ file_descriptor_limit }}
+root hard nofile {{ file_descriptor_limit }}
+
+# Default limits for all users
+* soft nofile 65536
+* hard nofile 65536
+* soft nproc 4096
+* hard nproc 4096
