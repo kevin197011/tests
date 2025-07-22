@@ -121,6 +121,13 @@
       notify: restart chronyd
       tags: [system, timezone]
 
+    - name: Enable and start chronyd
+      systemd:
+        name: chronyd
+        state: started
+        enabled: yes
+      tags: [system, timezone]
+
     - name: Configure system limits
       template:
         src: limits.conf.j2
@@ -419,3 +426,4 @@
       systemd:
         name: chronyd
         state: restarted
+        enabled: yes
