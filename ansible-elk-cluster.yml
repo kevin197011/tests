@@ -262,19 +262,19 @@
             group: elasticsearch
             mode: '0644'
 
-                        # 自动插入 elastic-certificates.p12 证书自动化任务
-                - name: Generate elastic-certificates.p12 on first ES node
-                  command: >
-                    /opt/elasticsearch/bin/elasticsearch-certutil cert --silent --self-signed
-                    --out {{ es_cert_path }}
-                    --dns {{ es_cert_dns }}
-                    --ip {{ es_cert_ips }}
-                    --pass {{ es_cert_password }}
-                  args:
-                    creates: "{{ es_cert_path }}"
-                  run_once: true
-                  delegate_to: "{{ groups['elasticsearch'][0] }}"
-                  tags: [elasticsearch, cert]
+        # 自动插入 elastic-certificates.p12 证书自动化任务
+        - name: Generate elastic-certificates.p12 on first ES node
+          command: >
+            /opt/elasticsearch/bin/elasticsearch-certutil cert --silent --self-signed
+            --out {{ es_cert_path }}
+            --dns {{ es_cert_dns }}
+            --ip {{ es_cert_ips }}
+            --pass {{ es_cert_password }}
+          args:
+            creates: "{{ es_cert_path }}"
+          run_once: true
+          delegate_to: "{{ groups['elasticsearch'][0] }}"
+          tags: [elasticsearch, cert]
 
         - name: Fetch elastic-certificates.p12 to control node
           fetch:
