@@ -42,13 +42,18 @@ graph TD
 - **X-Pack 安全**：启用认证和授权
 - **SSL/TLS 加密**：传输层和 HTTP 层加密
 - **系统服务安全**：systemd 安全限制
-- **防火墙配置**：精确端口开放
+- **自动密码生成**：安全的密码管理
 
 ### 📊 性能优化
 - **JVM 调优**：G1GC、内存配置、性能参数
 - **线程池优化**：写入和搜索队列
 - **断路器配置**：防止内存溢出
 - **索引优化**：分片和副本配置
+
+### 🎯 按角色部署
+- **模块化部署**：支持按角色分别部署
+- **灵活配置**：可单独部署系统配置、Elasticsearch、Logstash、Kibana
+- **自动化脚本**：一键部署或分步部署
 
 ## 🚀 快速开始
 
@@ -70,45 +75,100 @@ cd elk-cluster-deployment
 ```yaml
 elasticsearch:
   hosts:
-    es-node-1:
-      ansible_host: 192.168.1.10
-    es-node-2:
-      ansible_host: 192.168.1.11
-    es-node-3:
-      ansible_host: 192.168.1.12
+    devops-elk-es-01:
+      ansible_host: 10.170.1.46
+    devops-elk-es-02:
+      ansible_host: 10.170.1.47
+    devops-elk-es-03:
+      ansible_host: 10.170.1.48
+
+logstash:
+  hosts:
+    devops-elk-ls-01:
+      ansible_host: 10.170.1.49
+
+kibana:
+  hosts:
+    devops-elk-kb-01:
+      ansible_host: 10.170.1.50
 ```
 
-### 3. 创建密码文件
+### 3. 创建 Vault 密码文件
 
 ```bash
-# 创建 vault 文件
-ansible-vault create group_vars/all/vault.yml
-```
-
-添加以下内容：
-```yaml
-vault_elasticsearch_password: "your_secure_password"
-vault_kibana_password: "your_secure_password"
+# 创建 vault 密码文件
+echo "your_secret_vault_password" > .vault_pass.txt
+chmod 600 .vault_pass.txt
 ```
 
 ### 4. 执行部署
 
-```bash
-# 完整部署
-ansible-playbook -i inventory/hosts.yml ansible-elk-cluster.yml --ask-vault-pass
+#### 方法一：一键部署（推荐）
 
-# 分步部署
-ansible-playbook -i inventory/hosts.yml ansible-elk-cluster.yml --tags system
-ansible-playbook -i inventory/hosts.yml ansible-elk-cluster.yml --tags elasticsearch
-ansible-playbook -i inventory/hosts.yml ansible-elk-cluster.yml --tags logstash
-ansible-playbook -i inventory/hosts.yml ansible-elk-cluster.yml --tags kibana
+```bash
+# 自动生成密码并部署完整集群
+./deploy-elk.sh
+
+# 或明确指定完整部署
+./deploy-elk.sh --full
+```
+
+#### 方法二：分步部署
+
+```bash
+# 1. 仅生成密码
+./deploy-elk.sh --passwords
+
+# 2. 仅部署完整集群（需要已存在的密码）
+./deploy-elk.sh --deploy
+```
+
+#### 方法三：按角色部署
+
+```bash
+# 1. 生成密码
+./deploy-elk.sh --passwords
+
+# 2. 按角色部署（按顺序执行）
+./deploy-elk.sh --role system          # 基础系统配置
+./deploy-elk.sh --role elasticsearch   # Elasticsearch 集群
+./deploy-elk.sh --role logstash        # Logstash 服务
+./deploy-elk.sh --role kibana          # Kibana 界面
+```
+
+#### 方法四：手动执行
+
+```bash
+# 1. 生成密码
+ansible-playbook generate-passwords.yml --vault-password-file .vault_pass.txt
+
+# 2. 部署完整集群
+ansible-playbook ansible-elk-cluster.yml -i inventory/hosts.yml --vault-password-file .vault_pass.txt \
+  --vault-id @passwords/elastic_password.yml \
+  --vault-id @passwords/kibana_password.yml \
+  --vault-id @passwords/logstash_password.yml \
+  --vault-id @passwords/beats_password.yml \
+  --vault-id @passwords/monitoring_password.yml \
+  --vault-id @passwords/remote_monitoring_password.yml
+
+# 3. 按标签部署特定服务
+ansible-playbook ansible-elk-cluster.yml -i inventory/hosts.yml --vault-password-file .vault_pass.txt \
+  --tags system
+ansible-playbook ansible-elk-cluster.yml -i inventory/hosts.yml --vault-password-file .vault_pass.txt \
+  --tags elasticsearch
+ansible-playbook ansible-elk-cluster.yml -i inventory/hosts.yml --vault-password-file .vault_pass.txt \
+  --tags logstash
+ansible-playbook ansible-elk-cluster.yml -i inventory/hosts.yml --vault-password-file .vault_pass.txt \
+  --tags kibana
 ```
 
 ## 📁 项目结构
 
 ```
 elk-cluster-deployment/
-├── ansible-elk-cluster.yml    # 主 playbook
+├── ansible-elk-cluster.yml    # 主 playbook（按角色部署）
+├── generate-passwords.yml     # 密码生成 playbook
+├── deploy-elk.sh              # 一键部署脚本
 ├── ansible.cfg                # Ansible 配置
 ├── inventory/
 │   └── hosts.yml             # 主机清单
@@ -116,11 +176,16 @@ elk-cluster-deployment/
 │   ├── elasticsearch.yml.j2
 │   ├── jvm.options.j2
 │   ├── elasticsearch.service.j2
+│   ├── logstash.yml.j2
+│   ├── logstash.service.j2
+│   ├── kibana.yml.j2
+│   ├── kibana.service.j2
 │   ├── limits.conf.j2
 │   └── chrony.conf.j2
-├── group_vars/
-│   └── all/
-│       └── vault.yml         # 密码文件
+├── passwords/                 # 密码文件目录（自动生成）
+├── .vault_pass.txt           # Vault 密码文件
+├── .gitignore                # Git 忽略文件
+├── PASSWORD_MANAGEMENT.md    # 密码管理文档
 └── README.md
 ```
 
@@ -220,6 +285,10 @@ curl -u elastic:password http://localhost:9200/_nodes/stats
 4. **权限问题**
    - 检查 elasticsearch 用户权限
    - 验证目录权限
+
+5. **证书问题**
+   - 检查 elastic-certificates.p12 文件
+   - 验证证书密码配置
 
 ## 📄 许可证
 

@@ -7,26 +7,15 @@
 # Production ELK Cluster Deployment Playbook
 # Elasticsearch + Logstash + Kibana with system optimizations
 
-- name: Production ELK Cluster Deployment
+# =============================================================================
+# 1. 系统基础配置 (所有主机)
+# =============================================================================
+- name: System Configuration for All ELK Nodes
   hosts: all
   become: yes
   vars:
-    # ELK Versions
-    elasticsearch_version: "8.18.3"
-    logstash_version: "8.18.3"
-    kibana_version: "8.18.3"
-
     # Java Version
     java_version: "17"
-
-    # Cluster Configuration
-    cluster_name: "elk-cluster"
-    node_name: "{{ inventory_hostname }}"
-
-    # Elasticsearch Configuration
-    es_heap_size: "{{ (ansible_memtotal_mb * 0.5) | int }}m"
-    es_data_path: "/var/lib/elasticsearch"
-    es_logs_path: "/var/log/elasticsearch"
 
     # System Configuration
     vm_max_map_count: 262144
@@ -40,18 +29,6 @@
     # Disk I/O Optimization
     read_ahead_kb: 4096
     scheduler: "deadline"
-
-    # Security Configuration
-    elasticsearch_password: "{{ vault_elasticsearch_password }}"
-    kibana_password: "{{ vault_kibana_password }}"
-    logstash_password: "{{ vault_logstash_password }}"
-    beats_password: "{{ vault_beats_password }}"
-    monitoring_password: "{{ vault_monitoring_password }}"
-    remote_monitoring_password: "{{ vault_remote_monitoring_password }}"
-
-    es_cert_dns: "{{ groups['elasticsearch'] | join(',') }}"
-    es_cert_ips: "{{ groups['elasticsearch'] | map('extract', hostvars, ['ansible_host']) | join(',') }}"
-    es_cert_path: /opt/elasticsearch/config/elastic-certificates.p12
 
   tasks:
     - name: Disable firewalld
@@ -186,8 +163,59 @@
         shell: /bin/bash
         home: /home/elasticsearch
         createhome: yes
-      tags: [elasticsearch, users]
+      tags: [users]
 
+  handlers:
+    - name: restart chronyd
+      systemd:
+        name: chronyd
+        state: restarted
+        enabled: yes
+
+# =============================================================================
+# 2. Elasticsearch 部署
+# =============================================================================
+- name: Deploy Elasticsearch Cluster
+  hosts: elasticsearch
+  become: yes
+  vars:
+    # ELK Versions
+    elasticsearch_version: "8.17.0"
+
+    # Cluster Configuration
+    cluster_name: "elk-cluster"
+    node_name: "{{ inventory_hostname }}"
+
+    # Elasticsearch Configuration
+    es_heap_size: "{{ (ansible_memtotal_mb * 0.5) | int }}m"
+    es_data_path: "/var/lib/elasticsearch"
+    es_logs_path: "/var/log/elasticsearch"
+
+    # Security Configuration
+    elasticsearch_password: "{{ vault_elasticsearch_password }}"
+    kibana_password: "{{ vault_kibana_password }}"
+    logstash_password: "{{ vault_logstash_password }}"
+    beats_password: "{{ vault_beats_password }}"
+    monitoring_password: "{{ vault_monitoring_password }}"
+    remote_monitoring_password: "{{ vault_remote_monitoring_password }}"
+
+    # Certificate configuration
+    es_cert_dns:
+      - devops-elk-es-01
+      - devops-elk-es-02
+      - devops-elk-es-03
+      - devops-elk-ls-01
+      - devops-elk-kb-01
+    es_cert_ips:
+      - 10.170.1.46
+      - 10.170.1.47
+      - 10.170.1.48
+      - 10.170.1.49
+      - 10.170.1.50
+    es_cert_path: /opt/elasticsearch/config/elastic-certificates.p12
+    es_cert_password: elastic123
+
+  tasks:
     - name: Create elasticsearch directories
       file:
         path: "{{ item }}"
@@ -202,33 +230,6 @@
         - /etc/elasticsearch/jvm.options.d
         - /etc/elasticsearch/log4j2.properties.d
       tags: [elasticsearch, directories]
-
-    - name: Create logstash directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: elasticsearch
-        group: elasticsearch
-        mode: '0755'
-      loop:
-        - /var/lib/logstash
-        - /var/log/logstash
-        - /etc/logstash
-        - /etc/logstash/conf.d
-      tags: [logstash, directories]
-
-    - name: Create kibana directories
-      file:
-        path: "{{ item }}"
-        state: directory
-        owner: elasticsearch
-        group: elasticsearch
-        mode: '0755'
-      loop:
-        - /var/lib/kibana
-        - /var/log/kibana
-        - /etc/kibana
-      tags: [kibana, directories]
 
     - name: Download and install Elasticsearch
       block:
@@ -267,8 +268,8 @@
           command: >
             /opt/elasticsearch/bin/elasticsearch-certutil cert --silent --self-signed
             --out {{ es_cert_path }}
-            --dns {{ es_cert_dns }}
-            --ip {{ es_cert_ips }}
+            --dns {{ es_cert_dns | join(',') }}
+            --ip {{ es_cert_ips | join(',') }}
             --pass {{ es_cert_password }}
           args:
             creates: "{{ es_cert_path }}"
@@ -313,6 +314,76 @@
 
       tags: [elasticsearch, install]
 
+    - name: Start and enable Elasticsearch
+      systemd:
+        name: elasticsearch
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      tags: [elasticsearch, services]
+
+    - name: Wait for Elasticsearch to be ready
+      uri:
+        url: "http://localhost:9200/_cluster/health"
+        method: GET
+        status_code: 200
+      register: es_health
+      until: es_health.status == 200
+      retries: 30
+      delay: 10
+      tags: [elasticsearch, health]
+
+    - name: Set Elasticsearch passwords
+      uri:
+        url: "http://localhost:9200/_security/user/{{ item.user }}/_password"
+        method: POST
+        headers:
+          Content-Type: application/json
+        body: '{"password": "{{ item.password }}"}'
+        status_code: 200
+      loop:
+        - { user: 'elastic', password: '{{ elasticsearch_password }}' }
+        - { user: 'kibana_system', password: '{{ kibana_password }}' }
+        - { user: 'logstash_system', password: '{{ logstash_password }}' }
+        - { user: 'beats_system', password: '{{ beats_password }}' }
+        - { user: 'monitoring_agent', password: '{{ monitoring_password }}' }
+        - { user: 'remote_monitoring_user', password: '{{ remote_monitoring_password }}' }
+      tags: [elasticsearch, security]
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+# =============================================================================
+# 3. Logstash 部署
+# =============================================================================
+- name: Deploy Logstash
+  hosts: logstash
+  become: yes
+  vars:
+    # ELK Versions
+    logstash_version: "8.17.0"
+
+    # Security Configuration
+    elasticsearch_password: "{{ vault_elasticsearch_password }}"
+    logstash_password: "{{ vault_logstash_password }}"
+
+  tasks:
+    - name: Create logstash directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0755'
+      loop:
+        - /var/lib/logstash
+        - /var/log/logstash
+        - /etc/logstash
+        - /etc/logstash/conf.d
+      tags: [logstash, directories]
+
     - name: Download and install Logstash
       block:
         - name: Download Logstash
@@ -355,6 +426,47 @@
           notify: reload systemd
 
       tags: [logstash, install]
+
+    - name: Start and enable Logstash
+      systemd:
+        name: logstash
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      tags: [logstash, services]
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+# =============================================================================
+# 4. Kibana 部署
+# =============================================================================
+- name: Deploy Kibana
+  hosts: kibana
+  become: yes
+  vars:
+    # ELK Versions
+    kibana_version: "8.17.0"
+
+    # Security Configuration
+    elasticsearch_password: "{{ vault_elasticsearch_password }}"
+    kibana_password: "{{ vault_kibana_password }}"
+
+  tasks:
+    - name: Create kibana directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0755'
+      loop:
+        - /var/lib/kibana
+        - /var/log/kibana
+        - /etc/kibana
+      tags: [kibana, directories]
 
     - name: Download and install Kibana
       block:
@@ -399,53 +511,15 @@
 
       tags: [kibana, install]
 
-    - name: Start and enable services
+    - name: Start and enable Kibana
       systemd:
-        name: "{{ item }}"
+        name: kibana
         state: started
         enabled: yes
         daemon_reload: yes
-      loop:
-        - elasticsearch
-        - logstash
-        - kibana
-      tags: [services]
-
-    - name: Wait for Elasticsearch to be ready
-      uri:
-        url: "http://localhost:9200/_cluster/health"
-        method: GET
-        status_code: 200
-      register: es_health
-      until: es_health.status == 200
-      retries: 30
-      delay: 10
-      tags: [elasticsearch, health]
-
-    - name: Set Elasticsearch passwords
-      uri:
-        url: "http://localhost:9200/_security/user/{{ item.user }}/_password"
-        method: POST
-        headers:
-          Content-Type: application/json
-        body: '{"password": "{{ item.password }}"}'
-        status_code: 200
-      loop:
-        - { user: 'elastic', password: '{{ elasticsearch_password }}' }
-        - { user: 'kibana_system', password: '{{ kibana_password }}' }
-        - { user: 'logstash_system', password: '{{ logstash_password }}' }
-        - { user: 'beats_system', password: '{{ beats_password }}' }
-        - { user: 'monitoring_agent', password: '{{ monitoring_password }}' }
-        - { user: 'remote_monitoring_user', password: '{{ remote_monitoring_password }}' }
-      tags: [elasticsearch, security]
+      tags: [kibana, services]
 
   handlers:
     - name: reload systemd
       systemd:
         daemon_reload: yes
-
-    - name: restart chronyd
-      systemd:
-        name: chronyd
-        state: restarted
-        enabled: yes
