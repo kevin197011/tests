@@ -265,7 +265,7 @@
         # 自动插入 elastic-certificates.p12 证书自动化任务
         - name: Generate elastic-certificates.p12 on first ES node
           command: >
-            /opt/elasticsearch/bin/elasticsearch-certutil cert --silent
+            /opt/elasticsearch/bin/elasticsearch-certutil cert --silent --self-signed
             --out {{ es_cert_path }}
             --dns {{ es_cert_dns }}
             --ip {{ es_cert_ips }}
