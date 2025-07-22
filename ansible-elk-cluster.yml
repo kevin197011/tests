@@ -12,9 +12,9 @@
   become: yes
   vars:
     # ELK Versions
-    elasticsearch_version: "8.18.4"
-    logstash_version: "8.18.4"
-    kibana_version: "8.18.4"
+    elasticsearch_version: "8.18.3"
+    logstash_version: "8.18.3"
+    kibana_version: "8.18.3"
 
     # Java Version
     java_version: "17"
@@ -99,9 +99,32 @@
           - tcpdump
           - nc
           - telnet
-          - jq
+        state: present
+      ignore_errors: yes
+      tags: [system, packages]
+
+    - name: Install python3-pip (if available)
+      yum:
+        name:
           - python3-pip
         state: present
+      ignore_errors: yes
+      tags: [system, packages]
+
+    - name: Install additional packages (EPEL)
+      yum:
+        name:
+          - epel-release
+        state: present
+      tags: [system, packages]
+
+    - name: Install additional packages from EPEL
+      yum:
+        name:
+          - htop
+          - jq
+        state: present
+      ignore_errors: yes
       tags: [system, packages]
 
     - name: Configure timezone
