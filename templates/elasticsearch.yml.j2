@@ -31,12 +31,16 @@ xpack.security.enabled: true
 xpack.security.transport.ssl.enabled: true
 xpack.security.transport.ssl.verification_mode: certificate
 xpack.security.transport.ssl.keystore.path: elastic-certificates.p12
+xpack.security.transport.ssl.keystore.password: {{ es_cert_password }}
 xpack.security.transport.ssl.truststore.path: elastic-certificates.p12
+xpack.security.transport.ssl.truststore.password: {{ es_cert_password }}
 
 # HTTP Security
 xpack.security.http.ssl.enabled: true
 xpack.security.http.ssl.keystore.path: elastic-certificates.p12
+xpack.security.http.ssl.keystore.password: {{ es_cert_password }}
 xpack.security.http.ssl.truststore.path: elastic-certificates.p12
+xpack.security.http.ssl.truststore.password: {{ es_cert_password }}
 
 # Index Configuration
 action.auto_create_index: false
